@@ -3,18 +3,20 @@
 pragma solidity ^0.8.24;
 
 import "@openzeppelin/contracts/access/AccessControl.sol";
+import "@openzeppelin/contracts/utils/ReentrancyGuard.sol";
 
 import "./ERC20.sol";
 
 import "hardhat/console.sol";
 
-contract ERC20Votable is ERC20, AccessControl {
+contract ERC20Votable is ERC20, AccessControl, ReentrancyGuard {
   bytes32 public constant ADMIN_ROLE = keccak256("ADMIN_ROLE");
+  uint256 private constant PERCENTAGE = 10000;
 
   uint256 private constant minPercentageToInitiateVoting = 1e15; // 0.1% in wei percentage
   uint256 private constant minPercentageToVote = 5e14; // 0.05% in wei percentage
-  uint256 public timeToVote;
 
+  uint256 public timeToVote;
   uint256 public currentPrice;
 
   struct Voting {
@@ -26,15 +28,16 @@ contract ERC20Votable is ERC20, AccessControl {
     uint256 highestVotes;
   }
 
-  Voting private currentVoting;
-  mapping(uint256 => bool) private priceExists;
+  Voting public currentVoting;
 
   uint256 private buyFeePercentage;
   uint256 private sellFeePercentage;
+  uint256 private lastFeeCollectionTimestamp;
 
   event VotingStarted(uint256 startTime, uint256 endTime);
   event VoteCasted(address voter, uint256 price, uint256 voteCount);
   event VotingEnded(uint256 winningPrice);
+  event FeeCollected(uint256 amount);
 
   constructor(
     string memory name_,
@@ -49,6 +52,9 @@ contract ERC20Votable is ERC20, AccessControl {
     _mint(msg.sender, initialSupply);
     currentPrice = initialPrice;
     timeToVote = _timeToVote;
+
+    buyFeePercentage = 3000;
+    sellFeePercentage = 3000;
   }
 
   function startVoting(uint256 price) external {
@@ -103,8 +109,37 @@ contract ERC20Votable is ERC20, AccessControl {
     emit VotingEnded(currentPrice);
   }
 
+  function buy() external payable nonReentrant {
+    uint256 tokensWithoutFee = (msg.value * (1e18)) / currentPrice;
+    uint256 fee = (tokensWithoutFee * buyFeePercentage) / PERCENTAGE;
+    uint256 tokensWithFee = tokensWithoutFee - fee;
+    _mint(msg.sender, tokensWithFee);
+    _mint(address(this), fee);
+  }
+
+  function sell(uint256 tokenAmount) external nonReentrant {
+    uint256 etherAmountWithoutFee = (tokenAmount * currentPrice) / 1e18;
+    uint256 fee = (etherAmountWithoutFee * sellFeePercentage) / PERCENTAGE;
+    uint256 etherAmountWithFee = etherAmountWithoutFee - fee;
+    require(address(this).balance >= etherAmountWithFee, "Insufficient ETH in contract");
+    _burn(msg.sender, tokenAmount);
+    _mint(address(this), (fee * 1e18) / currentPrice);
+    payable(msg.sender).transfer(etherAmountWithFee);
+  }
+
+  function collectAndBurnFees() external onlyRole(ADMIN_ROLE) {
+    require(block.timestamp >= lastFeeCollectionTimestamp + 7 days, "Fees can only be collected weekly");
+    uint256 feeAmount = balanceOf(address(this));
+    _burn(address(this), feeAmount);
+    emit FeeCollected(feeAmount);
+    lastFeeCollectionTimestamp = block.timestamp;
+  }
+
   function setFees(uint256 _buyFeePercentage, uint256 _sellFeePercentage) external onlyRole(ADMIN_ROLE) {
-    require(_buyFeePercentage <= 100 && _sellFeePercentage <= 100, "Fee percentages must be between 0 and 100");
+    require(
+      _buyFeePercentage <= PERCENTAGE && _sellFeePercentage <= PERCENTAGE,
+      "Fee basis points must be between 0 and 10000"
+    );
     buyFeePercentage = _buyFeePercentage;
     sellFeePercentage = _sellFeePercentage;
   }

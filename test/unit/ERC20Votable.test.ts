@@ -1,8 +1,6 @@
-import { parseUnits } from 'ethers';
-import { ethers } from 'hardhat';
+import { parseEther, parseUnits } from 'ethers';
 
 import { tokenFixture } from '../fixtures/tokenFixture';
-import { increaseTime } from '../helpers/increaseTime';
 
 describe('ERC20Votable', function () {
   it('should initialize the ERC20Votable correctly', async function () {
@@ -12,17 +10,18 @@ describe('ERC20Votable', function () {
     console.log('totalSupply ==>', totalSupply);
 
     const value = parseUnits('1000');
-    const value2 = parseUnits('400');
 
     await erc20.connect(deployer).transfer(user1, value);
-    await erc20.connect(deployer).transfer(user2, value2);
 
     console.log('value ==>', value);
     await erc20.connect(user1).startVoting(value);
 
-    await erc20.connect(user2).vote(value2);
+    console.log('currentVoting ==>', await erc20.currentVoting());
 
-    const currentVoting = await erc20.currentVoting();
-    console.log('currentVoting ==>', currentVoting);
+    console.log('user1 balance', await erc20.balanceOf(user1));
+    await erc20.connect(user1).buy({ value: parseEther('1') });
+    console.log('user1 balance', await erc20.balanceOf(user1));
+
+    console.log('currentVoting ==>', await erc20.currentVoting());
   });
 });

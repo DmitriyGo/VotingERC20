@@ -16,7 +16,7 @@ const func: DeployFunction = async (hre: HardhatRuntimeEnvironment) => {
   const name = 'VotableToken';
   const symbol = 'VOTE';
   const initialSupply = parseEther(String(1_000_000));
-  const initialPrice = parseUnits('1', 'ether');
+  const initialPrice = parseEther('1');
   const timeToVote = 7 * 24 * 60 * 60; // 7 days in seconds
 
   const result = await deploy(CONTRACT_NAME, {
