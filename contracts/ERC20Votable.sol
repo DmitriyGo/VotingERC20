@@ -2,14 +2,14 @@
 
 pragma solidity ^0.8.24;
 
+import {VotingLinkedList, VotingData} from "./utils/VotingLinkedList.sol";
 import "@openzeppelin/contracts/access/AccessControl.sol";
 import "@openzeppelin/contracts/utils/ReentrancyGuard.sol";
-
+import "@openzeppelin/contracts/utils/cryptography/MerkleProof.sol";
 import "./ERC20.sol";
-
 import "hardhat/console.sol";
 
-contract ERC20Votable is ERC20, AccessControl, ReentrancyGuard {
+contract ERC20Votable is ERC20, AccessControl, ReentrancyGuard, VotingLinkedList {
   bytes32 public constant ADMIN_ROLE = keccak256("ADMIN_ROLE");
   uint256 private constant PERCENTAGE = 10000;
 
@@ -19,24 +19,20 @@ contract ERC20Votable is ERC20, AccessControl, ReentrancyGuard {
   uint256 public timeToVote;
   uint256 public currentPrice;
 
-  struct Voting {
-    bool active;
-    uint256 startTime;
-    uint256 endTime;
-    mapping(uint256 => uint256) votes;
-    uint256 leadingPrice;
-    uint256 highestVotes;
-  }
-
-  Voting public currentVoting;
+  bool public isVotingActive;
+  uint256 public votingStartTime;
+  uint256 public votingEndTime;
+  uint256 private votingRoundId;
+  uint256 private votingRoundLeadingPrice;
+  mapping(uint256 => mapping(address => bool)) hasVoted;
 
   uint256 private buyFeePercentage;
   uint256 private sellFeePercentage;
   uint256 private lastFeeCollectionTimestamp;
 
-  event VotingStarted(uint256 startTime, uint256 endTime);
-  event VoteCasted(address voter, uint256 price, uint256 voteCount);
-  event VotingEnded(uint256 winningPrice);
+  event VotingStarted(uint256 indexed roundId, uint256 startTime, uint256 endTime);
+  event VoteCast(uint256 indexed roundId, address indexed voter, uint256 price);
+  event VotingEnded(uint256 indexed roundId, uint256 newPrice);
   event FeeCollected(uint256 amount);
 
   constructor(
@@ -55,63 +51,68 @@ contract ERC20Votable is ERC20, AccessControl, ReentrancyGuard {
 
     buyFeePercentage = 3000;
     sellFeePercentage = 3000;
+    votingRoundId = 1;
   }
 
   function startVoting(uint256 price) external {
-    require(!currentVoting.active, "Voting already active");
-    console.log("balanceOf(msg.sender)", balanceOf(msg.sender));
-    console.log(
-      "(totalSupply() * minPercentageToInitiateVoting) / 1e18",
-      (totalSupply() * minPercentageToInitiateVoting) / 1e18
-    );
-
+    require(!isVotingActive, "Voting already active");
     require(
       balanceOf(msg.sender) >= (totalSupply() * minPercentageToInitiateVoting) / 1e18,
       "Insufficient balance to initiate voting"
     );
 
-    currentVoting.active = true;
-    currentVoting.startTime = block.timestamp;
-    currentVoting.endTime = block.timestamp + timeToVote;
+    isVotingActive = true;
+    votingStartTime = block.timestamp;
+    votingEndTime = block.timestamp + timeToVote;
 
-    _castVote(msg.sender, price);
+    _castVote(msg.sender, price, bytes32(0));
 
-    emit VotingStarted(currentVoting.startTime, currentVoting.endTime);
+    emit VotingStarted(votingRoundId, votingStartTime, votingEndTime);
   }
 
-  function vote(uint256 price) external {
-    require(currentVoting.active, "No active voting");
-    require(block.timestamp <= currentVoting.endTime, "Voting has ended");
-    require(balanceOf(msg.sender) >= (totalSupply() * minPercentageToVote) / 1e18, "Insufficient balance to vote");
+  function _castVote(address voter, uint256 price, bytes32 previousId) internal {
+    require(isVotingActive, "No active voting session");
+    require(balanceOf(voter) >= (totalSupply() * minPercentageToVote) / 1e18, "Insufficient balance to vote");
+    require(!hasVoted[votingRoundId][voter], "Already voted");
+    require(price > 0, "Price must be positive number");
 
-    _castVote(msg.sender, price);
+    uint256 tokenAmount = balanceOf(voter);
+    insert(votingRoundId, price, tokenAmount, previousId);
+    hasVoted[votingRoundId][voter] = true;
+    traverse();
+    console.log("\n");
+    emit VoteCast(votingRoundId, voter, price);
   }
 
-  function _castVote(address voter, uint256 price) private {
-    uint256 voterBalance = balanceOf(voter);
-    currentVoting.votes[price] += voterBalance;
-
-    if (currentVoting.votes[price] > currentVoting.highestVotes) {
-      currentVoting.leadingPrice = price;
-      currentVoting.highestVotes = currentVoting.votes[price];
-    }
-
-    emit VoteCasted(voter, price, voterBalance);
+  function castVote(uint256 price, bytes32 previousId) external {
+    _castVote(msg.sender, price, previousId);
   }
 
-  function endVoting() external onlyRole(ADMIN_ROLE) {
-    require(currentVoting.active, "No active voting");
-    require(block.timestamp > currentVoting.endTime, "Voting not yet ended");
+  function endVote() external onlyRole(ADMIN_ROLE) {
+    require(isVotingActive, "No active voting session");
+    require(block.timestamp >= votingEndTime, "Voting period has not ended");
 
-    currentVoting.active = false;
-    currentPrice = currentVoting.leadingPrice;
+    VotingData memory leadingData = getById(getId(votingRoundId, votingRoundLeadingPrice));
+    currentPrice = leadingData.price;
 
-    emit VotingEnded(currentPrice);
+    isVotingActive = false;
+    votingStartTime = 0;
+    votingEndTime = 0;
+    votingRoundLeadingPrice = 0;
+
+    votingRoundId++;
+    clear(); // Clear the list for the next voting round
+
+    emit VotingEnded(votingRoundId, currentPrice);
+  }
+
+  function calculateFee(uint256 amount, uint256 feePercentage) internal pure returns (uint256) {
+    return (amount * feePercentage) / PERCENTAGE;
   }
 
   function buy() external payable nonReentrant {
-    uint256 tokensWithoutFee = (msg.value * (1e18)) / currentPrice;
-    uint256 fee = (tokensWithoutFee * buyFeePercentage) / PERCENTAGE;
+    uint256 tokensWithoutFee = (msg.value * 1e18) / currentPrice;
+    uint256 fee = calculateFee(tokensWithoutFee, buyFeePercentage);
     uint256 tokensWithFee = tokensWithoutFee - fee;
     _mint(msg.sender, tokensWithFee);
     _mint(address(this), fee);
@@ -119,11 +120,10 @@ contract ERC20Votable is ERC20, AccessControl, ReentrancyGuard {
 
   function sell(uint256 tokenAmount) external nonReentrant {
     uint256 etherAmountWithoutFee = (tokenAmount * currentPrice) / 1e18;
-    uint256 fee = (etherAmountWithoutFee * sellFeePercentage) / PERCENTAGE;
+    uint256 fee = calculateFee(etherAmountWithoutFee, sellFeePercentage);
     uint256 etherAmountWithFee = etherAmountWithoutFee - fee;
     require(address(this).balance >= etherAmountWithFee, "Insufficient ETH in contract");
     _burn(msg.sender, tokenAmount);
-    _mint(address(this), (fee * 1e18) / currentPrice);
     payable(msg.sender).transfer(etherAmountWithFee);
   }
 

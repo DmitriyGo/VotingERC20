@@ -13,6 +13,7 @@ const config: HardhatUserConfig = {
     deployer: 0,
     user1: 1,
     user2: 2,
+    user3: 3,
   },
   defaultNetwork: 'hardhat',
   networks: {
