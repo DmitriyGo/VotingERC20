@@ -1,12 +1,10 @@
-import { expect } from 'chai';
-import { WeiPerEther, ZeroHash, parseEther, parseUnits } from 'ethers';
-import { ethers } from 'hardhat';
+import { ZeroHash, parseEther, parseUnits } from 'ethers';
 
 import { tokenFixture } from '../fixtures/tokenFixture';
 
 describe('ERC20Votable', function () {
   it('should initialize the ERC20Votable correctly', async function () {
-    const { deployer, user1, user2, user3, erc20 } = await tokenFixture();
+    const { deployer, user1, user2, erc20 } = await tokenFixture();
 
     const totalSupply = await erc20.totalSupply();
     console.log('totalSupply ==>', totalSupply);

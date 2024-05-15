@@ -1,6 +1,5 @@
 import { deployments } from 'hardhat';
 
-import { ERC20Tradable } from '../../typechain-types';
 export const tokenFixture = deployments.createFixture(async ({ deployments, getNamedAccounts, ethers }) => {
   const {
     deployer: deployerAddress,
