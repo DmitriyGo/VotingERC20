@@ -44,6 +44,7 @@ contract ERC20Tradable is ERC20Votable {
     uint256 price = voterToPrice[votingRoundId][msg.sender];
     VotingData memory data = getByPrice(votingRoundId, price);
     insert(votingRoundId, price, data.amount + tokensWithFee, previousId);
+    traverse();
   }
 
   function sell(uint256 tokenAmount) external nonReentrant notVoted {
@@ -68,6 +69,7 @@ contract ERC20Tradable is ERC20Votable {
     uint256 price = voterToPrice[votingRoundId][msg.sender];
     VotingData memory data = getByPrice(votingRoundId, price);
     insert(votingRoundId, price, data.amount - tokenAmount, previousId);
+    traverse();
   }
 
   function transfer(address _to, uint256 _value) public override notVoted returns (bool) {
@@ -75,9 +77,10 @@ contract ERC20Tradable is ERC20Votable {
     return result;
   }
 
-  function transfer(address to, uint256 value, bytes32 previousId) public voted returns (bool) {
+  function transfer(address to, uint256 value, bytes32 previousId1, bytes32 previousId2) public voted returns (bool) {
     bool result = super.transfer(to, value);
-    updateVotingPower(msg.sender, to, value, previousId);
+    updateVotingPower(msg.sender, to, value, previousId1, previousId2);
+    traverse();
     return result;
   }
 
@@ -86,25 +89,38 @@ contract ERC20Tradable is ERC20Votable {
     return result;
   }
 
-  function transferFrom(address from, address to, uint256 value, bytes32 previousId) public voted returns (bool) {
+  function transferFrom(
+    address from,
+    address to,
+    uint256 value,
+    bytes32 previousId1,
+    bytes32 previousId2
+  ) public voted returns (bool) {
     bool result = super.transferFrom(from, to, value);
-    updateVotingPower(from, to, value, previousId);
+    updateVotingPower(from, to, value, previousId1, previousId2);
+    traverse();
     return result;
   }
 
-  function updateVotingPower(address from, address to, uint256 amount, bytes32 previousId) private {
+  function updateVotingPower(
+    address from,
+    address to,
+    uint256 amount,
+    bytes32 previousId1,
+    bytes32 previousId2
+  ) private {
     if (from != address(0)) {
       uint256 fromPrice = voterToPrice[votingRoundId][from];
       VotingData memory fromData = getByPrice(votingRoundId, fromPrice);
       if (fromData.amount >= amount) {
-        insert(votingRoundId, fromPrice, fromData.amount - amount, previousId);
+        insert(votingRoundId, fromPrice, fromData.amount - amount, previousId1);
       }
     }
 
     if (to != address(0)) {
       uint256 toPrice = voterToPrice[votingRoundId][to];
       VotingData memory toData = getByPrice(votingRoundId, toPrice);
-      insert(votingRoundId, toPrice, toData.amount + amount, previousId);
+      insert(votingRoundId, toPrice, toData.amount + amount, previousId2);
     }
   }
 

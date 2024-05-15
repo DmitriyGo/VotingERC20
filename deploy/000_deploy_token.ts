@@ -1,10 +1,10 @@
-import { parseEther, parseUnits } from 'ethers';
+import { parseEther } from 'ethers';
 import { HardhatRuntimeEnvironment } from 'hardhat/types';
 import { DeployFunction } from 'hardhat-deploy/types';
 
 import { verify } from '../utils';
 
-const CONTRACT_NAME = 'ERC20Votable';
+const CONTRACT_NAME = 'ERC20Tradable';
 
 const func: DeployFunction = async (hre: HardhatRuntimeEnvironment) => {
   const {

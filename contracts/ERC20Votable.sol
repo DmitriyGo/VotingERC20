@@ -79,7 +79,7 @@ contract ERC20Votable is ERC20, AccessControl, ReentrancyGuard, VotingLinkedList
   function _castVote(address voter, uint256 price, bytes32 previousId) internal {
     require(isVotingActive, "No active voting session");
     require(balanceOf(voter) >= (totalSupply() * minPercentageToVote) / 1e18, "Insufficient balance to vote");
-    require(voterToPrice[votingRoundId][voter] != 0, "Already voted");
+    require(voterToPrice[votingRoundId][voter] == 0, "Already voted");
     require(price > 0, "Price must be positive number");
 
     uint256 tokenAmount = balanceOf(voter);
