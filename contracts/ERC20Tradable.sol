@@ -70,6 +70,44 @@ contract ERC20Tradable is ERC20Votable {
     insert(votingRoundId, price, data.amount - tokenAmount, previousId);
   }
 
+  function transfer(address _to, uint256 _value) public override notVoted returns (bool) {
+    bool result = super.transfer(_to, _value);
+    return result;
+  }
+
+  function transfer(address to, uint256 value, bytes32 previousId) public voted returns (bool) {
+    bool result = super.transfer(to, value);
+    updateVotingPower(msg.sender, to, value, previousId);
+    return result;
+  }
+
+  function transferFrom(address _from, address _to, uint256 _value) public override notVoted returns (bool) {
+    bool result = super.transferFrom(_from, _to, _value);
+    return result;
+  }
+
+  function transferFrom(address from, address to, uint256 value, bytes32 previousId) public voted returns (bool) {
+    bool result = super.transferFrom(from, to, value);
+    updateVotingPower(from, to, value, previousId);
+    return result;
+  }
+
+  function updateVotingPower(address from, address to, uint256 amount, bytes32 previousId) private {
+    if (from != address(0)) {
+      uint256 fromPrice = voterToPrice[votingRoundId][from];
+      VotingData memory fromData = getByPrice(votingRoundId, fromPrice);
+      if (fromData.amount >= amount) {
+        insert(votingRoundId, fromPrice, fromData.amount - amount, previousId);
+      }
+    }
+
+    if (to != address(0)) {
+      uint256 toPrice = voterToPrice[votingRoundId][to];
+      VotingData memory toData = getByPrice(votingRoundId, toPrice);
+      insert(votingRoundId, toPrice, toData.amount + amount, previousId);
+    }
+  }
+
   function collectAndBurnFees() external onlyRole(ADMIN_ROLE) {
     require(block.timestamp >= lastFeeCollectionTimestamp + 7 days, "Fees can only be collected weekly");
     uint256 feeAmount = balanceOf(address(this));
