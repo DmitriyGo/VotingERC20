@@ -11,7 +11,6 @@ import "hardhat/console.sol";
 
 contract ERC20Votable is ERC20, AccessControl, ReentrancyGuard, VotingLinkedList {
   bytes32 public constant ADMIN_ROLE = keccak256("ADMIN_ROLE");
-  uint256 private constant PERCENTAGE = 10000;
 
   uint256 private constant minPercentageToInitiateVoting = 1e15; // 0.1% in wei percentage
   uint256 private constant minPercentageToVote = 5e14; // 0.05% in wei percentage
@@ -22,36 +21,43 @@ contract ERC20Votable is ERC20, AccessControl, ReentrancyGuard, VotingLinkedList
   bool public isVotingActive;
   uint256 public votingStartTime;
   uint256 public votingEndTime;
-  uint256 private votingRoundId;
+  uint256 internal votingRoundId;
   uint256 private votingRoundLeadingPrice;
-  mapping(uint256 => mapping(address => bool)) hasVoted;
-
-  uint256 private buyFeePercentage;
-  uint256 private sellFeePercentage;
-  uint256 private lastFeeCollectionTimestamp;
+  mapping(uint256 => mapping(address => uint256)) voterToPrice;
 
   event VotingStarted(uint256 indexed roundId, uint256 startTime, uint256 endTime);
   event VoteCast(uint256 indexed roundId, address indexed voter, uint256 price);
   event VotingEnded(uint256 indexed roundId, uint256 newPrice);
-  event FeeCollected(uint256 amount);
 
   constructor(
     string memory name_,
     string memory symbol_,
     uint256 initialSupply,
-    uint256 initialPrice,
     uint256 _timeToVote
   ) ERC20(name_, symbol_) {
     _grantRole(DEFAULT_ADMIN_ROLE, msg.sender);
     _grantRole(ADMIN_ROLE, msg.sender);
 
     _mint(msg.sender, initialSupply);
-    currentPrice = initialPrice;
     timeToVote = _timeToVote;
 
-    buyFeePercentage = 3000;
-    sellFeePercentage = 3000;
     votingRoundId = 1;
+  }
+
+  modifier voted() {
+    require(
+      voterToPrice[votingRoundId][msg.sender] != 0,
+      "This feature is for users who have voted in this round, use the alternative method"
+    );
+    _;
+  }
+
+  modifier notVoted() {
+    require(
+      voterToPrice[votingRoundId][msg.sender] == 0,
+      "This feature is for users who haven't voted in this round, use an alternative method"
+    );
+    _;
   }
 
   function startVoting(uint256 price) external {
@@ -73,12 +79,12 @@ contract ERC20Votable is ERC20, AccessControl, ReentrancyGuard, VotingLinkedList
   function _castVote(address voter, uint256 price, bytes32 previousId) internal {
     require(isVotingActive, "No active voting session");
     require(balanceOf(voter) >= (totalSupply() * minPercentageToVote) / 1e18, "Insufficient balance to vote");
-    require(!hasVoted[votingRoundId][voter], "Already voted");
+    require(voterToPrice[votingRoundId][voter] != 0, "Already voted");
     require(price > 0, "Price must be positive number");
 
     uint256 tokenAmount = balanceOf(voter);
     insert(votingRoundId, price, tokenAmount, previousId);
-    hasVoted[votingRoundId][voter] = true;
+    voterToPrice[votingRoundId][voter] = price;
     traverse();
     console.log("\n");
     emit VoteCast(votingRoundId, voter, price);
@@ -101,47 +107,9 @@ contract ERC20Votable is ERC20, AccessControl, ReentrancyGuard, VotingLinkedList
     votingRoundLeadingPrice = 0;
 
     votingRoundId++;
-    clear(); // Clear the list for the next voting round
+    clear();
 
     emit VotingEnded(votingRoundId, currentPrice);
-  }
-
-  function calculateFee(uint256 amount, uint256 feePercentage) internal pure returns (uint256) {
-    return (amount * feePercentage) / PERCENTAGE;
-  }
-
-  function buy() external payable nonReentrant {
-    uint256 tokensWithoutFee = (msg.value * 1e18) / currentPrice;
-    uint256 fee = calculateFee(tokensWithoutFee, buyFeePercentage);
-    uint256 tokensWithFee = tokensWithoutFee - fee;
-    _mint(msg.sender, tokensWithFee);
-    _mint(address(this), fee);
-  }
-
-  function sell(uint256 tokenAmount) external nonReentrant {
-    uint256 etherAmountWithoutFee = (tokenAmount * currentPrice) / 1e18;
-    uint256 fee = calculateFee(etherAmountWithoutFee, sellFeePercentage);
-    uint256 etherAmountWithFee = etherAmountWithoutFee - fee;
-    require(address(this).balance >= etherAmountWithFee, "Insufficient ETH in contract");
-    _burn(msg.sender, tokenAmount);
-    payable(msg.sender).transfer(etherAmountWithFee);
-  }
-
-  function collectAndBurnFees() external onlyRole(ADMIN_ROLE) {
-    require(block.timestamp >= lastFeeCollectionTimestamp + 7 days, "Fees can only be collected weekly");
-    uint256 feeAmount = balanceOf(address(this));
-    _burn(address(this), feeAmount);
-    emit FeeCollected(feeAmount);
-    lastFeeCollectionTimestamp = block.timestamp;
-  }
-
-  function setFees(uint256 _buyFeePercentage, uint256 _sellFeePercentage) external onlyRole(ADMIN_ROLE) {
-    require(
-      _buyFeePercentage <= PERCENTAGE && _sellFeePercentage <= PERCENTAGE,
-      "Fee basis points must be between 0 and 10000"
-    );
-    buyFeePercentage = _buyFeePercentage;
-    sellFeePercentage = _sellFeePercentage;
   }
 
   function grantAdminRole(address account) external onlyRole(DEFAULT_ADMIN_ROLE) {

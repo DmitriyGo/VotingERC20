@@ -22,10 +22,15 @@ describe('ERC20Votable', function () {
     await erc20.connect(user1).buy({ value: parseEther('1') });
     console.log('user1 balance', await erc20.balanceOf(user1));
     console.log('totalSupply==>', await erc20.totalSupply());
-    await erc20.connect(deployer).transfer(user2, ((await erc20.totalSupply()) * 5n) / 10000n);
-    await erc20.connect(user2).castVote(price2, ZeroHash);
 
-    await erc20.connect(deployer).transfer(user3, ((await erc20.totalSupply()) * 5n) / 10000n);
-    await erc20.connect(user3).castVote(price1, await erc20.getId(1, price2));
+    await erc20.connect(user1).sell(await ethers.provider.getBalance(erc20));
+    console.log('totalSupply==>', await erc20.totalSupply());
+    await erc20.collectAndBurnFees();
+    console.log('totalSupply==>', await erc20.totalSupply());
+    // await erc20.connect(deployer).transfer(user2, ((await erc20.totalSupply()) * 5n) / 10000n);
+    // await erc20.connect(user2).castVote(price2, ZeroHash);
+
+    // await erc20.connect(deployer).transfer(user3, ((await erc20.totalSupply()) * 5n) / 10000n);
+    // await erc20.connect(user3).castVote(price1, await erc20.getId(1, price2));
   });
 });
