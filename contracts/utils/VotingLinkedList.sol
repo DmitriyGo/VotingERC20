@@ -1,6 +1,8 @@
 // SPDX-License-Identifier: MIT
 pragma solidity 0.8.24;
 
+import "hardhat/console.sol";
+
 struct VotingData {
   uint256 price;
   uint256 amount;
@@ -46,8 +48,12 @@ contract VotingLinkedList {
   function traverse() public view {
     bytes32 current = head;
     while (current != bytes32(0)) {
+      console.logBytes32(current);
+      console.log("Price: ", list[current].data.price);
+      console.log("Amount: ", list[current].data.amount);
       current = list[current].next;
     }
+    console.log("\n");
   }
 
   function insert(uint256 _votingId, uint256 _price, uint256 _amount, bytes32 previousId) public {
