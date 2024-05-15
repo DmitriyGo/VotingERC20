@@ -69,6 +69,13 @@ jobs:
       - name: Install project dependencies
         if: steps.cache.outputs.cache-hit != 'true'
         run: yarn
+      - name: 'Create env file'
+        run: |
+          touch .env
+          echo INFURA_KEY=${{ secrets.INFURA_KEY }} >> .env
+          echo MNEMONIC_DEV=${{ secrets.MNEMONIC_DEV }} >> .env
+          echo MNEMONIC_PROD=${{ secrets.MNEMONIC_PROD }} >> .env
+          cat .env
       - name: Build contracts
         run: yarn build
 
@@ -91,7 +98,6 @@ jobs:
       - name: 'Create env file'
         run: |
           touch .env
-          echo FORKING_NETWORK=${{ secrets.FORKING_NETWORK }} >> .env
           echo INFURA_KEY=${{ secrets.INFURA_KEY }} >> .env
           echo MNEMONIC_DEV=${{ secrets.MNEMONIC_DEV }} >> .env
           echo MNEMONIC_PROD=${{ secrets.MNEMONIC_PROD }} >> .env
