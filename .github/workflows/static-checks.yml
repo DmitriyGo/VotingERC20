@@ -91,10 +91,10 @@ jobs:
       - name: 'Create env file'
         run: |
           touch .env
-          echo FORKING_NETWORK=${{ secrets.FORK }} >> .env
-          echo INFURA_KEY=${{ secrets.INFURA }} >> .env
-          echo MNEMONIC_DEV=${{ secrets.MNEMONIC }} >> .env
-          echo MNEMONIC_PROD=${{ secrets.MNEMONIC }} >> .env
+          echo FORKING_NETWORK=${{ secrets.FORKING_NETWORK }} >> .env
+          echo INFURA_KEY=${{ secrets.INFURA_KEY }} >> .env
+          echo MNEMONIC_DEV=${{ secrets.MNEMONIC_DEV }} >> .env
+          echo MNEMONIC_PROD=${{ secrets.MNEMONIC_PROD }} >> .env
           cat .env
       - name: Test contracts
         run: yarn test
