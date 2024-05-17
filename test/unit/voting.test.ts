@@ -1,6 +1,5 @@
 import { expect } from 'chai';
-import { WeiPerEther, ZeroHash, parseEther } from 'ethers';
-import { ethers } from 'hardhat';
+import { ZeroHash, parseEther } from 'ethers';
 
 import { tokenFixture } from '../fixtures/tokenFixture';
 
