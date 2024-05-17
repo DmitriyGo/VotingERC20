@@ -4,13 +4,14 @@ pragma solidity ^0.8.24;
 
 import {ERC20Votable} from "./ERC20Votable.sol";
 import {VotingData} from "./utils/VotingLinkedList.sol";
+import "hardhat/console.sol";
 
 contract ERC20Tradable is ERC20Votable {
-  uint256 private constant _PERCENTAGE = 10000;
+  uint256 public constant PERCENTAGE = 10000;
 
-  uint256 private _buyFeePercentage;
-  uint256 private _sellFeePercentage;
-  uint256 private _lastFeeCollectionTimestamp;
+  uint256 public buyFeePercentage;
+  uint256 public sellFeePercentage;
+  uint256 public lastFeeCollectionTimestamp;
 
   event FeeCollected(uint256 amount);
 
@@ -22,21 +23,23 @@ contract ERC20Tradable is ERC20Votable {
     uint256 _timeToVote
   ) ERC20Votable(name_, symbol_, initialSupply, _timeToVote) {
     currentPrice = initialPrice;
-    _buyFeePercentage = 3000;
-    _sellFeePercentage = 3000;
+    buyFeePercentage = 3000;
+    sellFeePercentage = 3000;
   }
 
   function buy() external payable nonReentrant notVoted {
+    require(msg.value > 0, "Must send ETH to buy tokens");
     uint256 tokensWithoutFee = (msg.value * 1e18) / currentPrice;
-    uint256 fee = _calculateFee(tokensWithoutFee, _buyFeePercentage);
+    uint256 fee = _calculateFee(tokensWithoutFee, buyFeePercentage);
     uint256 tokensWithFee = tokensWithoutFee - fee;
     _mint(msg.sender, tokensWithFee);
     _mint(address(this), fee);
   }
 
   function buy(bytes32 previousId) external payable nonReentrant voted {
+    require(msg.value > 0, "Must send ETH to buy tokens");
     uint256 tokensWithoutFee = (msg.value * 1e18) / currentPrice;
-    uint256 fee = _calculateFee(tokensWithoutFee, _buyFeePercentage);
+    uint256 fee = _calculateFee(tokensWithoutFee, buyFeePercentage);
     uint256 tokensWithFee = tokensWithoutFee - fee;
     _mint(msg.sender, tokensWithFee);
     _mint(address(this), fee);
@@ -48,22 +51,27 @@ contract ERC20Tradable is ERC20Votable {
   }
 
   function sell(uint256 tokenAmount) external nonReentrant notVoted {
+    require(tokenAmount > 0, "Must sell more than 0 tokens");
+
     uint256 etherAmountWithoutFee = (tokenAmount * currentPrice) / 1e18;
-    uint256 fee = _calculateFee(etherAmountWithoutFee, _sellFeePercentage);
-    uint256 etherAmountWithFee = etherAmountWithoutFee - fee;
+    uint256 etherFee = _calculateFee(etherAmountWithoutFee, sellFeePercentage);
+    uint256 etherAmountWithFee = etherAmountWithoutFee - etherFee;
     require(address(this).balance >= etherAmountWithFee, "Insufficient ETH in contract");
-    _burn(msg.sender, tokenAmount);
-    _mint(address(this), fee);
+
+    uint256 tokenFee = _calculateFee(tokenAmount, sellFeePercentage);
+    uint256 tokensToBurn = tokenAmount - tokenFee;
+
+    _transfer(msg.sender, address(this), tokenAmount);
+    _burn(address(this), tokensToBurn);
     payable(msg.sender).transfer(etherAmountWithFee);
   }
 
   function sell(uint256 tokenAmount, bytes32 previousId) external nonReentrant voted {
     uint256 etherAmountWithoutFee = (tokenAmount * currentPrice) / 1e18;
-    uint256 fee = _calculateFee(etherAmountWithoutFee, _sellFeePercentage);
+    uint256 fee = _calculateFee(etherAmountWithoutFee, sellFeePercentage);
     uint256 etherAmountWithFee = etherAmountWithoutFee - fee;
     require(address(this).balance >= etherAmountWithFee, "Insufficient ETH in contract");
     _burn(msg.sender, tokenAmount);
-    _mint(address(this), fee);
     payable(msg.sender).transfer(etherAmountWithFee);
 
     uint256 price = _voterToPrice[_votingRoundId][msg.sender];
@@ -125,23 +133,23 @@ contract ERC20Tradable is ERC20Votable {
   }
 
   function collectAndBurnFees() external onlyRole(ADMIN_ROLE) {
-    require(block.timestamp >= _lastFeeCollectionTimestamp + 7 days, "Fees can only be collected weekly");
+    require(block.timestamp >= lastFeeCollectionTimestamp + 7 days, "Fees can only be collected weekly");
     uint256 feeAmount = balanceOf(address(this));
     _burn(address(this), feeAmount);
     emit FeeCollected(feeAmount);
-    _lastFeeCollectionTimestamp = block.timestamp;
+    lastFeeCollectionTimestamp = block.timestamp;
   }
 
   function _calculateFee(uint256 amount, uint256 feePercentage) internal pure returns (uint256) {
-    return (amount * feePercentage) / _PERCENTAGE;
+    return (amount * feePercentage) / PERCENTAGE;
   }
 
   function setFees(uint256 buyFeePercentage_, uint256 sellFeePercentage_) external onlyRole(ADMIN_ROLE) {
     require(
-      buyFeePercentage_ <= _PERCENTAGE && sellFeePercentage_ <= _PERCENTAGE,
+      buyFeePercentage_ <= PERCENTAGE && sellFeePercentage_ <= PERCENTAGE,
       "Fee basis points must be between 0 and 10000"
     );
-    _buyFeePercentage = buyFeePercentage_;
-    _sellFeePercentage = sellFeePercentage_;
+    buyFeePercentage = buyFeePercentage_;
+    sellFeePercentage = sellFeePercentage_;
   }
 }

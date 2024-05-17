@@ -11,8 +11,8 @@ import "./ERC20.sol";
 contract ERC20Votable is ERC20, AccessControl, ReentrancyGuard, VotingLinkedList {
   bytes32 public constant ADMIN_ROLE = keccak256("ADMIN_ROLE");
 
-  uint256 private constant _MIN_PERCENTAGE_TO_INITIATE_VOTING = 1e15; // 0.1% in wei percentage
-  uint256 private constant _MIN_PERCENTAGE_TO_VOTE = 5e14; // 0.05% in wei percentage
+  uint256 public constant MIN_PERCENTAGE_TO_INITIATE_VOTING = 1e15; // 0.1% in wei percentage
+  uint256 public constant MIN_PERCENTAGE_TO_VOTE = 5e14; // 0.05% in wei percentage
 
   uint256 public timeToVote;
   uint256 public currentPrice;
@@ -62,7 +62,7 @@ contract ERC20Votable is ERC20, AccessControl, ReentrancyGuard, VotingLinkedList
   function startVoting(uint256 price) external {
     require(!isVotingActive, "Voting already active");
     require(
-      balanceOf(msg.sender) >= (totalSupply() * _MIN_PERCENTAGE_TO_INITIATE_VOTING) / 1e18,
+      balanceOf(msg.sender) >= (totalSupply() * MIN_PERCENTAGE_TO_INITIATE_VOTING) / 1e18,
       "Insufficient balance to initiate voting"
     );
 
@@ -77,7 +77,7 @@ contract ERC20Votable is ERC20, AccessControl, ReentrancyGuard, VotingLinkedList
 
   function _castVote(address voter, uint256 price, bytes32 previousId) internal {
     require(isVotingActive, "No active voting session");
-    require(balanceOf(voter) >= (totalSupply() * _MIN_PERCENTAGE_TO_VOTE) / 1e18, "Insufficient balance to vote");
+    require(balanceOf(voter) >= (totalSupply() * MIN_PERCENTAGE_TO_VOTE) / 1e18, "Insufficient balance to vote");
     require(_voterToPrice[_votingRoundId][voter] == 0, "Already voted");
     require(price > 0, "Price must be positive number");
 

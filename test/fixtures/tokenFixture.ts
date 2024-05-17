@@ -15,7 +15,8 @@ export const tokenFixture = deployments.createFixture(async ({ deployments, getN
 
   await deployments.fixture(['core']);
 
-  const erc20 = await ethers.getContractAt('ERC20Tradable', (await deployments.get('ERC20Tradable')).address, deployer);
+  const erc20Address = (await deployments.get('ERC20Tradable')).address;
+  const erc20 = await ethers.getContractAt('ERC20Tradable', erc20Address, deployer);
 
   return {
     deployer,
@@ -23,5 +24,6 @@ export const tokenFixture = deployments.createFixture(async ({ deployments, getN
     user2,
     user3,
     erc20,
+    erc20Address,
   };
 });
